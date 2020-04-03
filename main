@@ -1,0 +1,459 @@
+# imports
+def warn(*args, **kwargs):
+    pass
+
+
+import warnings
+
+warnings.warn = warn
+import sklearn
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sn
+from sklearn import model_selection, neighbors, svm, gaussian_process, tree, ensemble, neural_network, metrics
+from sklearn.model_selection import cross_val_score, LeaveOneOut, KFold, cross_val_predict
+from sklearn.metrics import confusion_matrix, accuracy_score
+from sklearn.utils import resample
+
+# setup
+full_data = False
+bootstrapping = True
+cross_val = False
+X_train = []
+X_test = []
+y_train = []
+y_test = []
+n_train = 0
+n_test = 0
+n_repeat = 5  # Number of iterations for computing expectations
+
+# import data from git
+
+def import_data():
+    print("importing data")
+    if full_data:
+        # full 2 year compas scores dataset
+        file_path = "https://raw.githubusercontent.com/clairecoffey/project/master/mphilproject/compas-scores-two-years.csv?token=ABPC6VLCW4ZX3G2HEIGCTWS6MT7UC"
+    else:
+        # very small subset of first 100 people
+        file_path = "https://raw.githubusercontent.com/clairecoffey/project/master/mphilproject/100-compas-scores-two-years%20-%20Sheet1.csv?token=ABPC6VOBHEMN5HJMNEH7WCC6SBOEU"
+
+    # Load CSV contents
+    #convert to numpy array?
+    all_data = (pd.read_csv(file_path, delimiter=',').values)
+
+    # We also preprocess relevant data (i.e. convert strings to ints)
+    # for all of these, 0 means missing or not valid category
+
+    # store fields separately for easy access; maybe this is overkill?
+    ids = all_data[:, 0]
+    full_names = all_data[:, 1]
+    firsts = all_data[:, 2]
+    lasts = all_data[:, 3]
+
+    # convert to integer categories where 0 is female, 1 is male, -1 is other
+    sexes = all_data[:, 4]
+    for i, sex in enumerate(sexes):
+        if sexes[i] == 'Female':
+            sexes[i] = 0
+        elif sexes[i] == 'Male':
+            sexes[i] = 1
+        else:
+            sexes[i] = -1
+
+    dobs = all_data[:, 5]
+    ages = all_data[:, 6]
+
+    # convert to integer categories where < 25 = 0; 25-45 = 1; >45 = 2
+    age_cats = all_data[:, 7]
+    for i, age_cat in enumerate(age_cats):
+        if age_cats[i] == 'Less than 25':
+            age_cats[i] = 0
+        elif age_cats[i] == '25 - 45':
+            age_cats[i] = 1
+        elif age_cats[i] == 'Greater than 45':
+            age_cats[i] = 2
+        else:
+            age_cats[i] = -1
+
+    races = all_data[:, 8]
+    for i, race in enumerate(races):
+        if races[i] == 'African-American':
+            races[i] = 0
+        elif races[i] == 'Asian':
+            races[i] = 1
+        elif races[i] == 'Caucasian':
+            races[i] = 2
+        elif races[i] == 'Hispanic':
+            races[i] = 3
+        elif races[i] == 'Native American':
+            races[i] = 4
+        elif races[i] == 'Other':
+            races[i] = 5
+        else:
+            races[i] = -1
+
+    # juv_fel_counts = all_data[:,9]
+    # juv_misd_counts =	all_data[:,10]
+    # juv_other_counts =	all_data[:,11]
+    priors_counts = all_data[:, 12]
+    # days_b_screening_arrests =	all_data[:,13]
+    # c_jail_ins	= all_data[:,14]
+    # c_jail_outs =	all_data[:,15]
+
+    # jail_times = np.empty(c_jail_ins.size)
+
+    # for i, jail_in in enumerate(c_jail_ins):
+    #   for j, jail_out in enumerate(c_jail_outs):
+    #     date_out = pd.to_datetime(c_jail_outs[j])
+    #     date_in = pd.to_datetime(c_jail_ins[i])
+    #     jail_times[i] = int(pd.to_numeric((date_out - date_in).days))
+
+    # c_charge_degrees =	all_data[:,19]
+    # is_recids =	all_data[:,21]
+
+    # # r_charge_degrees =	all_data[:,23]
+    # # r_days_from_arrests =	all_data[:,24]
+    # # r_jail_ins =	all_data[:,27]
+    # # r_jail_outs =	all_data[:,28]
+
+    # # for i, r_jail_in in enumerate(r_jail_ins):
+    # #   for j, r_jail_out in enumerate(r_jail_outs):
+    # #     date_out = pd.to_datetime(r_jail_outs[j])
+    # #     date_in = pd.to_datetime(r_jail_ins[i])
+    # #     r_jail_times[i] = int(pd.to_numeric((date_out - date_in).days))
+
+    # # is_violent_recids =	all_data[:,33]
+    # # vr_charge_degrees =	all_data[:,35]
+    # in_custodys =	all_data[:,35]
+    # out_custodys =	all_data[:,36]
+
+    # custody_length = np.empty(in_custodys.size)
+
+    # for i, in_custody in enumerate(in_custodys):
+    #   for j, out_custody in enumerate(out_custodys):
+    #     date_out = pd.to_datetime(out_custodys[j])
+    #     date_in = pd.to_datetime(in_custodys[i])
+    #     custody_length[i] = int(pd.to_numeric((date_out - date_in).days))
+
+    # priors_counts =	all_data[:,37]
+    # starts =	all_data[:,38]
+    # ends =	all_data[:,39]
+    # events =	all_data[:,40]
+    two_year_recids = all_data[:, 41]
+
+    # #normal recidivism - this is what we are predicting
+    labels = two_year_recids.astype(int)
+    # #then make this the label
+    labels_list = [0, 1]
+
+    # obviously this is a load of crap but for now
+    # just predicting on ages and priors count
+    training_data = all_data[:, 6:12].astype(int)
+    # races, juv_fel_counts,juv_misd_counts, juv_other_counts, priors_counts, days_b_screening_arrests, jail_times, c_charge_degrees, is_recids, custody_length, priors_counts, two_year_recids)
+
+    training_data_and_labels = []
+
+    print("training data")
+    print(training_data)
+
+    print("labels")
+    print(labels)
+
+    for i, individual in enumerate(training_data):
+        data_label_tuple = individual, labels[i]
+        print(data_label_tuple)
+        training_data_and_labels.append(data_label_tuple)
+
+    print(len(training_data_and_labels))
+
+    return training_data, labels, labels_list, training_data_and_labels
+
+
+# Computing the different Performance Metrics
+def compute_metrics(clf, dataX, dataY, labels_list, show=True):
+    # Using Confusion Matrix to compute metrics
+    def performance_measures(y_true, y_pred):
+        # Creating confusion matrix
+        cnf_matrix = confusion_matrix(y_true, y_pred)
+        # Calculating metrics from conf matrixa
+        FP = cnf_matrix.sum(axis=0) - np.diag(cnf_matrix)
+        FN = cnf_matrix.sum(axis=1) - np.diag(cnf_matrix)
+        TP = np.diag(cnf_matrix)
+        TN = cnf_matrix.sum() - (FP + FN + TP)
+        TP_rate = TP / (TP + FN)
+        FP_rate = FP / (FP + TN)
+        precision = TP / (TP + FP)
+        f_measure = 2 * ((precision * TP_rate) / (precision + TP_rate))
+        acc = (TP + TN) / (TP + FP + FN + TN)
+        avg_acc = acc.mean()
+        # Returning
+        return (acc, TP_rate, FP_rate, precision, f_measure,
+                np.round(cnf_matrix / cnf_matrix.sum(axis=1), 2))
+
+    y_pred = clf.predict(dataX)
+
+    acc, tp_rate, fp_rate, precision, f_measure, cnf_matrix = performance_measures(y_true=dataY,
+                                                                                   y_pred=y_pred)
+
+    performance_metrics = {"ACC": acc, "TP_Rate": tp_rate, "FP_Rate": fp_rate,
+                           "Precision": precision, "F_Measure": f_measure,
+                           "Confusion Matrix": cnf_matrix}
+
+    if show:
+        show_metrics(performance_metrics, labels_list)
+
+    return performance_metrics, y_pred
+
+
+# printing performance metrics
+def show_metrics(performance_metrics, labels_list):
+    for metric_name, metric in performance_metrics.items():
+        if metric_name.startswith("Confusion"):
+            print("Confusion Matrix: ")
+            print(pd.DataFrame(metric,
+                               index=labels_list,
+                               columns=labels_list))
+        else:
+            # We want the average of all classes
+            avg_metric = metric.mean()
+            print("Metric : % s, Score : % 5.2f" % (metric_name, avg_metric))
+
+
+# Plotting the Confusion Matrix
+def plot_confusion_matrix(confusion_matrix, labels_list):
+    df_cm = pd.DataFrame(confusion_matrix,
+                         index=[i for i in labels_list],
+                         columns=[i for i in labels_list])
+    plt.figure()
+    sn.set(font_scale=1.4)  # for label size
+    sn.heatmap(df_cm, annot=True, annot_kws={"size": 10}, cmap="Blues")
+    plt.show()
+
+
+def compute_bias_variance(classifier_name, y_pred):
+
+    print("computing bias/variance")
+    # come back to this!!
+    # Bias^2 + Variance + Noise decomposition of the mean squared error
+    y_error = np.zeros(n_test)
+
+    for i in range(n_repeat):
+        for j in range(n_repeat):
+            # squared bias error
+            y_error += (y_test[j] - y_pred[i]) ** 2
+
+    y_error /= (n_repeat * n_repeat)
+
+    y_noise = np.var(y_test)
+    y_bias = ((X_test) - (y_pred)) ** 2
+    y_var = np.var(y_pred)
+
+    print("{0}: {1:.4f} (error) = {2:.4f} (bias^2) "
+          " + {3:.4f} (var) + {4:.4f} (noise)".format(classifier_name,
+                                                      np.mean(y_error),
+                                                      np.mean(y_bias),
+                                                      np.mean(y_var),
+                                                      np.mean(y_noise)))
+
+    plt.xlim([-5, 5])
+    plt.title(classifier_name)
+
+    plt.plot(X_test, y_error, "r", label="$error(x)$")
+    plt.plot(X_test, y_bias, "b", label="$bias^2(x)$"),
+    plt.plot(X_test, y_var, "g", label="$variance(x)$"),
+    plt.plot(X_test, y_noise, "c", label="$noise(x)$")
+
+    plt.xlim([-5, 5])
+    plt.ylim([0, 0.1])
+
+    plt.subplots_adjust(right=.75)
+    plt.show()
+
+
+# def compute_bias(clf, dataX, dataY):
+#     return (bias)
+#
+#
+# def compute_variance(clf, dataX, dataY):
+#     return (bias)
+
+def define_classifiers():
+    print("defining classifiers")
+    # random classifiers to test
+    classifier_names = ["Nearest Neighbors", "Linear SVM", "RBF SVM", "Gaussian Process",
+                        "Decision Tree", "Random Forest", "Neural Network"]
+    # need to do grid search etc to find optimal parameters; these are random ones
+    classifiers = [
+        neighbors.KNeighborsClassifier(5),
+        svm.SVC(kernel="linear", C=0.025),
+        svm.SVC(gamma=2, C=2),
+        gaussian_process.GaussianProcessClassifier(1.0 * gaussian_process.kernels.RBF(1.0), multi_class='one_vs_one'),
+        tree.DecisionTreeClassifier(max_depth=10),
+        ensemble.RandomForestClassifier(max_depth=10, n_estimators=100, max_features=2),
+        neural_network.MLPClassifier(alpha=0.01, max_iter=1000)]
+    # SVM with different kernels e.g. polynomial, gaussian
+
+    # choose classifier
+    classifier = "Random Forest"
+    print("Classifer used: ", classifier)
+    return classifier, classifiers, classifier_names
+
+
+def cross_validation(clf, classifier, training_data, labels, labels_list, classifiers, classifier_names):
+
+    # Training the data using the train set
+    clf.fit(X_train, y_train)
+
+    n_splits = 5
+
+    kf = KFold(n_splits)
+
+    # Create empty accuracy array of size k
+    accuracies = np.empty(n_splits)
+    count = 0
+    for train, validate in kf.split(X_train):
+        clf = classifiers[classifier_names.index(classifier)]
+        # Split the data into training and validation sets
+        X_training = X_train[train]
+        y_training = y_train[train]
+        x_validate = X_train[validate]
+        y_validate = y_train[validate]
+        # Train model
+        clf.fit(X_training, y_training)
+        # Calculate the performance for validation set but don't print
+        performance_metrics, y_pred = compute_metrics(clf, x_validate, y_validate, labels_list, show=False)
+        # Store accuracies
+        accuracies[count] = performance_metrics['ACC'].mean()
+        count += 1
+
+    # Compute the average cross validation score using the accuracies
+    cv_score = accuracies.mean()
+
+    # Compute the CV_score as average score across all n trials
+    print("5-Fold Cross Validation Scores:", cv_score)
+    print("Average 5-Fold Cross Validation Score:", cv_score.mean())
+
+    return clf
+
+# bootstrapping is sampling with replacement
+def bootstrap(clf, training_data_and_labels):
+    global X_train
+    global y_train
+    global X_test
+    global y_test
+
+    # use full dataset not just training data. use boot to fit model then use the out of bag samples for testing
+    boot = resample(training_data_and_labels, replace=True, n_samples=30, random_state=1)
+
+
+    #want to get just the training data out of the list, not the labels, to compare to those in the boot list
+    #first element of each array in the list
+
+    found = False
+    oob = []
+
+    #need to compare to each element in boot
+    #then if none of them are equal, append to oob
+    for data_and_label in training_data_and_labels:
+        for element in boot:
+            current_elem = element
+            # print(data_and_label[0])
+            # print(type(data_and_label[0]))
+            if np.array_equal(data_and_label[0], element[0]):
+                found = True
+                break
+            else:
+                found = False
+        if not found:
+            oob.append(data_and_label)
+            found = False
+
+
+    # oob = [np.array([x for x in training_data_and_labels if x not in boot])]
+
+    # model is fit on the drawn sample and evaluated on the out-of-bag sample
+
+    training_data = []
+    training_labels = []
+    testing_data = []
+    testing_labels = []
+
+    for data_and_label in boot:
+        training_data.append(data_and_label[0])
+        training_labels.append(data_and_label[1])
+
+    for data_and_label in oob:
+        testing_data.append(data_and_label[0])
+        testing_labels.append(data_and_label[1])
+
+    X_train = training_data
+    y_train = training_labels
+    X_test = testing_data
+    y_test = testing_labels
+
+    clf.fit(X_train, y_train)
+
+    return clf
+
+    # print(boot)
+
+def classify(training_data, labels, labels_list, training_data_and_labels):
+    classifier, classifiers, classifier_names = define_classifiers()
+
+    # Creating a classifier object
+    clf = classifiers[classifier_names.index(classifier)]
+
+    if(cross_val):
+        # if we want to use cross validation:
+        clf = cross_validation(clf, classifier, training_data, labels, labels_list, classifiers, classifier_names)
+
+    if(bootstrapping):
+        clf = bootstrap(clf, training_data_and_labels)
+
+    # Computing and printing performance metrics (actually do the classification on test data)
+    performance_metrics, y_pred = compute_metrics(clf, X_test, y_test, labels_list, show=True)
+    plot_confusion_matrix(performance_metrics["Confusion Matrix"], labels_list)
+
+    return classifier, y_pred
+
+
+def define_data(labels, training_data):
+    global X_train
+    global X_test
+    global y_train
+    global y_test
+    global n_train
+    global n_test
+
+    print("performing 5-fold cross validation")
+
+    # Setting dataX and dataY
+    dataX = training_data.astype('int')
+
+    # Making sure labels are int values
+    dataY = labels.astype('int')
+
+    #  Creating Training and Test splits
+    # Do this because we still want to reserve portion of data as final test set
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(dataX, dataY, test_size=0.2)
+
+    n_train = len(y_test)
+    n_test = len(y_test)
+
+    # return full data
+    return dataX, dataY
+
+
+
+def main():
+    training_data, labels, labels_list, training_data_and_labels = import_data()
+    # dataX, dataY = define_data(labels, training_data)
+    classifier, y_pred = classify(training_data, labels, labels_list, training_data_and_labels)
+    bias, variance = compute_bias_variance(classifier, y_pred)
+    # plot_bias_variance(bias, variance)
+
+
+
+main()
