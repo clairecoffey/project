@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sn
+import statistics
 from sklearn import model_selection, neighbors, svm, gaussian_process, tree, ensemble, neural_network, metrics
 from sklearn.model_selection import cross_val_score, LeaveOneOut, KFold, cross_val_predict
 from sklearn.metrics import confusion_matrix, accuracy_score
@@ -26,7 +27,7 @@ y_train = []
 y_test = []
 n_train = 0
 n_test = 0
-n_repeat = 5  # Number of iterations for computing expectations
+num_bootstraps = 50;
 
 # import data from git
 
@@ -232,44 +233,54 @@ def plot_confusion_matrix(confusion_matrix, labels_list):
     plt.show()
 
 
-def compute_bias_variance(classifier_name, y_pred):
+def compute_bias_variance(predictions):
 
-    print("computing bias/variance")
-    # come back to this!!
-    # Bias^2 + Variance + Noise decomposition of the mean squared error
-    y_error = np.zeros(n_test)
+    bias = 
 
-    for i in range(n_repeat):
-        for j in range(n_repeat):
-            # squared bias error
-            y_error += (y_test[j] - y_pred[i]) ** 2
+    variance = statistics.variance(predictions, xbar=None)
 
-    y_error /= (n_repeat * n_repeat)
+    return bias, variance
 
-    y_noise = np.var(y_test)
-    y_bias = ((X_test) - (y_pred)) ** 2
-    y_var = np.var(y_pred)
 
-    print("{0}: {1:.4f} (error) = {2:.4f} (bias^2) "
-          " + {3:.4f} (var) + {4:.4f} (noise)".format(classifier_name,
-                                                      np.mean(y_error),
-                                                      np.mean(y_bias),
-                                                      np.mean(y_var),
-                                                      np.mean(y_noise)))
 
-    plt.xlim([-5, 5])
-    plt.title(classifier_name)
-
-    plt.plot(X_test, y_error, "r", label="$error(x)$")
-    plt.plot(X_test, y_bias, "b", label="$bias^2(x)$"),
-    plt.plot(X_test, y_var, "g", label="$variance(x)$"),
-    plt.plot(X_test, y_noise, "c", label="$noise(x)$")
-
-    plt.xlim([-5, 5])
-    plt.ylim([0, 0.1])
-
-    plt.subplots_adjust(right=.75)
-    plt.show()
+    # print("computing bias/variance")
+    # # come back to this!!
+    # # Bias^2 + Variance + Noise decomposition of the mean squared error
+    # y_error = np.zeros(n_test)
+    #
+    # for i in range(n_repeat):
+    #     for j in range(n_repeat):
+    #         # squared bias error
+    #         y_error += (y_test[j] - y_pred[i]) ** 2
+    #
+    # y_error /= (n_repeat * n_repeat)
+    #
+    # y_noise = np.var(y_test)
+    # print(y_test)
+    # #this doesn't make sense because theyre classification results (lists of 1/0)
+    # y_bias = ((y_test) - (y_pred)) ** 2
+    # y_var = np.var(y_pred)
+    #
+    # print("{0}: {1:.4f} (error) = {2:.4f} (bias^2) "
+    #       " + {3:.4f} (var) + {4:.4f} (noise)".format(classifier_name,
+    #                                                   np.mean(y_error),
+    #                                                   np.mean(y_bias),
+    #                                                   np.mean(y_var),
+    #                                                   np.mean(y_noise)))
+    #
+    # plt.xlim([-5, 5])
+    # plt.title(classifier_name)
+    #
+    # plt.plot(X_test, y_error, "r", label="$error(x)$")
+    # plt.plot(X_test, y_bias, "b", label="$bias^2(x)$"),
+    # plt.plot(X_test, y_var, "g", label="$variance(x)$"),
+    # plt.plot(X_test, y_noise, "c", label="$noise(x)$")
+    #
+    # plt.xlim([-5, 5])
+    # plt.ylim([0, 0.1])
+    #
+    # plt.subplots_adjust(right=.75)
+    # plt.show()
 
 
 # def compute_bias(clf, dataX, dataY):
@@ -394,8 +405,9 @@ def bootstrap(clf, training_data_and_labels):
     y_test = testing_labels
 
     clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
 
-    return clf
+    return clf, y_pred
 
     # print(boot)
 
@@ -409,14 +421,25 @@ def classify(training_data, labels, labels_list, training_data_and_labels):
         # if we want to use cross validation:
         clf = cross_validation(clf, classifier, training_data, labels, labels_list, classifiers, classifier_names)
 
+    count = 0
+
+    predictions = []
+
     if(bootstrapping):
-        clf = bootstrap(clf, training_data_and_labels)
+        while count <= num_bootstraps:
+            clf, y_pred = bootstrap(clf, training_data_and_labels)
+            predictions.append(y_pred)
+            count += 1
+
+    print(predictions)
+
+    return predictions
 
     # Computing and printing performance metrics (actually do the classification on test data)
-    performance_metrics, y_pred = compute_metrics(clf, X_test, y_test, labels_list, show=True)
-    plot_confusion_matrix(performance_metrics["Confusion Matrix"], labels_list)
+    # performance_metrics, y_pred = compute_metrics(clf, X_test, y_test, labels_list, show=True)
+    # plot_confusion_matrix(performance_metrics["Confusion Matrix"], labels_list)
 
-    return classifier, y_pred
+    # return classifier, y_pred
 
 
 def define_data(labels, training_data):
@@ -450,10 +473,9 @@ def define_data(labels, training_data):
 def main():
     training_data, labels, labels_list, training_data_and_labels = import_data()
     # dataX, dataY = define_data(labels, training_data)
-    classifier, y_pred = classify(training_data, labels, labels_list, training_data_and_labels)
-    bias, variance = compute_bias_variance(classifier, y_pred)
+    predictions = classify(training_data, labels, labels_list, training_data_and_labels)
+    # bias, variance = compute_bias_variance(predictions)
     # plot_bias_variance(bias, variance)
-
 
 
 main()
