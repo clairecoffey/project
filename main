@@ -233,13 +233,53 @@ def plot_confusion_matrix(confusion_matrix, labels_list):
     plt.show()
 
 
-def compute_bias_variance(predictions):
+def compute_bias_variance(predictions, true_labels):
 
-    bias = 
+    #think we need a bias and variance for each element
+    #then we can use these to get the overall/avg across predictions?
+    biases = []
+    variances = []
+    count = 0
+    prob_misclassified = 0
+    total_misclassified = 0
+    avg_errors = []
 
-    variance = statistics.variance(predictions, xbar=None)
+    # calculate the bias and variance for each value of X,y
+    for pred_labels in predictions:
+        index = 0
+        labels = true_labels[count]
+        count += 1
+        total_misclassified = 0
+        # using all the bootstrap sample predictions
+        #loop through all of the predictions for a particular index (X value)
+        #and calculate the average misclassification error for this X
+        for pred_label in pred_labels:
+            true_label = labels[index]
+            if true_label == pred_label:
+                prob_misclassified = 0
+            else:
+                prob_misclassified = 1
+            index += 1
+            total_misclassified += prob_misclassified
 
-    return bias, variance
+        avg_error = total_misclassified/len(pred_labels)
+        avg_errors.append(avg_error)
+
+
+    print(avg_errors)
+
+    #define bias as http://www.cems.uwe.ac.uk/~irjohnso/coursenotes/uqc832/tr-bias.pdf
+    for avg_error in avg_errors:
+        if avg_error <= 0.5:
+            biases.append(0)
+        else:
+            biases.append(1)
+
+    print (biases)
+
+            # variance = statistics.variance(predictions, xbar=None)
+
+    # return bias, variance
 
 
 
@@ -381,7 +421,6 @@ def bootstrap(clf, training_data_and_labels):
             oob.append(data_and_label)
             found = False
 
-
     # oob = [np.array([x for x in training_data_and_labels if x not in boot])]
 
     # model is fit on the drawn sample and evaluated on the out-of-bag sample
@@ -406,8 +445,9 @@ def bootstrap(clf, training_data_and_labels):
 
     clf.fit(X_train, y_train)
     y_pred = clf.predict(X_test)
+    y_true = y_test
 
-    return clf, y_pred
+    return clf, y_pred, y_true
 
     # print(boot)
 
@@ -424,16 +464,16 @@ def classify(training_data, labels, labels_list, training_data_and_labels):
     count = 0
 
     predictions = []
+    true_labels = []
 
     if(bootstrapping):
         while count <= num_bootstraps:
-            clf, y_pred = bootstrap(clf, training_data_and_labels)
+            clf, y_pred, y_true = bootstrap(clf, training_data_and_labels)
             predictions.append(y_pred)
+            true_labels.append(y_true)
             count += 1
 
-    print(predictions)
-
-    return predictions
+    return predictions, true_labels
 
     # Computing and printing performance metrics (actually do the classification on test data)
     # performance_metrics, y_pred = compute_metrics(clf, X_test, y_test, labels_list, show=True)
@@ -473,8 +513,8 @@ def define_data(labels, training_data):
 def main():
     training_data, labels, labels_list, training_data_and_labels = import_data()
     # dataX, dataY = define_data(labels, training_data)
-    predictions = classify(training_data, labels, labels_list, training_data_and_labels)
-    # bias, variance = compute_bias_variance(predictions)
+    predictions, true_labels = classify(training_data, labels, labels_list, training_data_and_labels)
+    bias, variance = compute_bias_variance(predictions, true_labels)
     # plot_bias_variance(bias, variance)
 
 
