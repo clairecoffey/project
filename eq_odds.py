@@ -1,3 +1,4 @@
+
 """
 This equalised odds implementation is taken from https://github.com/gpleiss/equalized_odds_and_calibration.
 From the paper "On Fairness and Calibration" (http://papers.nips.cc/paper/7151-on-fairness-and-calibration.pdf).
@@ -7,8 +8,11 @@ import cvxpy as cvx
 import numpy as np
 from collections import namedtuple
 
-
 class Model(namedtuple('Model', 'pred label')):
+
+    def warn(*args, **kwargs):
+        pass
+
     def logits(self):
         raw_logits = np.clip(np.log(self.pred / (1 - self.pred)), -100, 100)
         return raw_logits
@@ -202,8 +206,8 @@ if __name__ == '__main__':
     # order = np.random.permutation(len(test_and_val_data))
     #put test data first so indexes match up with original ones
     # used for cross-referencing data to find misclassified individuals later 
-    test_data = test_and_val_data.iloc[:(len(test_and_val_data)/2),:]
-    val_data = test_and_val_data.iloc[(len(test_and_val_data)/2):,:]
+    test_data = test_and_val_data.iloc[:(int(len(test_and_val_data)/2)),:]
+    val_data = test_and_val_data.iloc[(int(len(test_and_val_data)/2)):,:]
 
     # Create model objects - one for each group, validation and test
     group_0_val_data = val_data[val_data['group'] == 0]
@@ -211,10 +215,10 @@ if __name__ == '__main__':
     group_0_test_data = test_data[test_data['group'] == 0]
     group_1_test_data = test_data[test_data['group'] == 1]
 
-    group_0_val_model = Model(group_0_val_data['prediction'].as_matrix(), group_0_val_data['label'].as_matrix())
-    group_1_val_model = Model(group_1_val_data['prediction'].as_matrix(), group_1_val_data['label'].as_matrix())
-    group_0_test_model = Model(group_0_test_data['prediction'].as_matrix(), group_0_test_data['label'].as_matrix())
-    group_1_test_model = Model(group_1_test_data['prediction'].as_matrix(), group_1_test_data['label'].as_matrix())
+    group_0_val_model = Model(group_0_val_data['prediction'].values, group_0_val_data['label'].values)
+    group_1_val_model = Model(group_1_val_data['prediction'].values, group_1_val_data['label'].values)
+    group_0_test_model = Model(group_0_test_data['prediction'].values, group_0_test_data['label'].values)
+    group_1_test_model = Model(group_1_test_data['prediction'].values, group_1_test_data['label'].values)
 
     # Find mixing rates for equalized odds models
     _, _, mix_rates = Model.eq_odds(group_0_val_model, group_1_val_model)
@@ -225,22 +229,22 @@ if __name__ == '__main__':
                                                                            mix_rates)
 
     # Print results on test model    
-    print('Original group 0 model:\n%s\n' % repr(group_0_test_model))
+    # print('Original group 0 model:\n%s\n' % repr(group_0_test_model))
     # print('Predictions: ')
     # print(group_0_test_model.pred)
     # print('True labels: ') 
     # print(group_0_test_model.label)
-    print('Original group 1 model:\n%s\n' % repr(group_1_test_model))
+    # print('Original group 1 model:\n%s\n' % repr(group_1_test_model))
     # print('Predictions: ')
     # print(group_1_test_model.pred)
     # print('True labels: ') 
     # print(group_1_test_model.label)
-    print('Equalized odds group 0 model:\n%s\n' % repr(eq_odds_group_0_test_model))
+    # print('Equalized odds group 0 model:\n%s\n' % repr(eq_odds_group_0_test_model))
     # print('Predictions: ')
     # print(eq_odds_group_0_test_model.pred)
     # print('True labels: ') 
     # print(eq_odds_group_0_test_model.label)
-    print('Equalized odds group 1 model:\n%s\n' % repr(eq_odds_group_1_test_model))
+    # print('Equalized odds group 1 model:\n%s\n' % repr(eq_odds_group_1_test_model))
     # print('Predictions: ')
     # print(eq_odds_group_1_test_model.pred)
     # print('True labels: ') 
